@@ -66,6 +66,8 @@ INSTALLED_APPS = [
     # Third party
     "rest_framework",
     "drf_spectacular",
+    # Local Swagger UI / Redoc bundles - API docs need no CDN
+    "drf_spectacular_sidecar",
     # Local apps
     "apps.users",
     "apps.tasks",
@@ -148,6 +150,17 @@ SPECTACULAR_SETTINGS = {
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
     "SECURITY": [{"bearerAuth": []}],
+    # Serve Swagger UI and Redoc from the version-pinned local bundle shipped by
+    # drf-spectacular-sidecar instead of a remote CDN:
+    #  * no external network dependency for the documentation pages;
+    #  * no "Cannot use 'import.meta' outside a module" error, because
+    #    `redoc@latest` on the CDN is Redoc 3.x whose standalone bundle is an
+    #    ES module, while the bundled one is a classic UMD build.
+    "SWAGGER_UI_DIST": "SIDECAR",
+    "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
+    "REDOC_DIST": "SIDECAR",
+    # Redoc must not fetch Google Fonts at runtime: keep the page fully local.
+    "REDOC_UI_SETTINGS": {"disableGoogleFont": True},
 }
 
 # --- Internationalization / static / messages -------------------------------

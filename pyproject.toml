@@ -8,12 +8,17 @@ dependencies = [
     "djangorestframework>=3.15",
     "djangorestframework-simplejwt>=5.3",
     "drf-spectacular>=0.28",
+    "drf-spectacular-sidecar>=2026.10.1",
 ]
 
 [dependency-groups]
 dev = [
+    # Playwright is pinned because the E2E Docker image tag (Dockerfile.e2e)
+    # must match the browser revision installed by `playwright install`.
+    "playwright==1.64.1",
     "pytest>=8.0",
     "pytest-django>=4.8",
+    "pytest-playwright==0.10.0",
     "ruff>=0.6",
 ]
 
@@ -41,4 +46,8 @@ ignore = [
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings"
 python_files = ["test_*.py"]
-addopts = "-q"
+# Default run = unit/integration tests. Browser E2E tests are explicit:
+#   uv run pytest tests/e2e
+testpaths = ["apps", "web"]
+# Playwright artifacts (screenshots, traces, videos) are kept for failed tests.
+addopts = "-q --browser=chromium --output=test-results --screenshot=only-on-failure --tracing=retain-on-failure --video=retain-on-failure"

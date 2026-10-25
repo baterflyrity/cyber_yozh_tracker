@@ -2,7 +2,7 @@
 
 Веб-приложение для управления задачами: REST API на **Django 5.2 LTS + Django REST Framework**, JWT-аутентификация, OpenAPI-документация (Swagger UI / Redoc) и встроенный браузерный интерфейс на Django templates + vanilla JavaScript с темами **Системная / Светлая / Тёмная**.
 
-Одна команда `docker compose up --build` поднимает приложение с миграциями и идемпотентными демо-данными. Отдельный контейнер БД не нужен: используется SQLite в именованном Docker volume.
+Одна команда `docker compose up --build` поднимает приложение с миграциями и идемпотентными демо-данными. Отдельный контейнер БД не нужен: используется SQLite в именованном Docker volume. Браузерные E2E-тесты (Playwright) запускаются отдельным профилем Compose.
 
 ---
 
@@ -15,15 +15,16 @@
 5. [Пошаговый E2E-сценарий (curl)](#5-пошаговый-e2e-сценарий-curl)
 6. [UI smoke-check](#6-ui-smoke-check)
 7. [Запуск тестов и линтера](#7-запуск-тестов-и-линтера)
-8. [Полезные Docker-команды](#8-полезные-docker-команды)
-9. [Запуск без Docker](#9-запуск-без-docker)
-10. [API reference](#10-api-reference)
-11. [Правила доступа](#11-правила-доступа)
-12. [Структура проекта](#12-структура-проекта)
-13. [Конфигурация и безопасность](#13-конфигурация-и-безопасность)
-14. [Известные ограничения](#14-известные-ограничения)
-15. [Статус проверки этой сборки](#15-статус-проверки-этой-сборки)
-16. [Документация](#16-документация)
+8. [Браузерные E2E-тесты (Playwright)](#8-браузерные-e2e-тесты-playwright)
+9. [Полезные Docker-команды](#9-полезные-docker-команды)
+10. [Запуск без Docker](#10-запуск-без-docker)
+11. [API reference](#11-api-reference)
+12. [Правила доступа](#12-правила-доступа)
+13. [Структура проекта](#13-структура-проекта)
+14. [Конфигурация и безопасность](#14-конфигурация-и-безопасность)
+15. [Известные ограничения](#15-известные-ограничения)
+16. [Типичные ошибки и их устранение](#16-типичные-ошибки-и-их-устранение)
+17. [Документация](#17-документация)
 
 ---
 
@@ -35,11 +36,12 @@
 - Справочник пользователей `GET /api/users/?search=` для назначения исполнителя (только `id` и `username`).
 - Комментарии во вложенном URL `/api/tasks/{task_id}/comments/`, каскадное удаление с задачей.
 - Фильтр `?is_completed=true|false`, поиск `?search=` по заголовку и описанию, сортировка `?ordering=` (поля `created_at`, `updated_at`, `title`, `is_completed`), пагинация по 20 элементов (`page`, `page_size`, максимум 100).
-- OpenAPI-схема и интерактивная документация.
+- OpenAPI-схема и интерактивная документация; Swagger UI и Redoc отдаются **локально** из пакета `drf-spectacular-sidecar` (пиненая версия, без CDN).
 - Браузерный интерфейс: список/поиск/фильтры задач, создание, редактирование, назначение, смена статуса, удаление с подтверждением, комментарии, состояния загрузки/ошибки/пустого списка, адаптивная вёрстка и три режима темы с запоминанием выбора.
-- Docker Compose: миграции → идемпотентный seed → development server.
+- Автоматические тесты: unit/integration (pytest) и браузерные E2E (Playwright, headless Chromium).
+- Docker Compose: миграции → идемпотентный seed → development server; отдельный профиль `e2e` для браузерных тестов.
 
-**Стек:** Python 3.12, Django 5.2 LTS, Django REST Framework, djangorestframework-simplejwt, drf-spectacular, SQLite, uv (зависимости и lock-файл), pytest + pytest-django, Ruff.
+**Стек:** Python 3.12, Django 5.2 LTS, Django REST Framework, djangorestframework-simplejwt, drf-spectacular (+ sidecar), SQLite, uv (зависимости и lock-файл), pytest + pytest-django, Playwright for Python, Ruff.
 
 ## 2. Демонстрация UI
 
@@ -59,12 +61,12 @@
 
 ## 3. Быстрый запуск через Docker Compose
 
-**Требования:** Docker Engine 20.10+ (или Docker Desktop) с плагином Docker Compose v2 (`docker compose version` должен вернуть версию). Других зависимостей не нужно.
+**Требования:** Docker Engine 20.10+ (или Docker Desktop) с плагином Docker Compose v2 (`docker compose version` должен вернуть версию). Для браузерных E2E-тестов в контейнере дополнительно нужен только Docker — браузер ставится внутрь образа.
 
 ```bash
 # 1. клонировать репозиторий и перейти в него
-git clone <repo-url> cyberyozh-task-manager
-cd cyberyozh-task-manager
+git clone https://github.com/baterflyrity/cyber_yozh_tracker.git
+cd cyber_yozh_tracker
 
 # 2. собрать образы и запустить приложение
 docker compose up --build
@@ -77,7 +79,7 @@ docker compose up --build
 3. при `SEED_DEMO_DATA=1` выполняется `python manage.py seed_demo_data` (идемпотентно, см. раздел 4);
 4. запускается development server на `0.0.0.0:8000`.
 
-Ожидаемое состояние: сервис `web` запущен, в логах видны строки `Applying database migrations`, `Demo data is up to date.` и `Starting development server on 0.0.0.0:8000`, а `curl -I http://localhost:8000/` возвращает `HTTP/1.1 200 OK`.
+Ожидаемое состояние: сервис `web` запущен и проходит healthcheck (`docker compose ps` показывает `healthy`), в логах видны строки `Applying database migrations`, `Demo data is up to date.` и `Starting development server on 0.0.0.0:8000`, а `curl -I http://localhost:8000/` возвращает `HTTP/1.1 200 OK`.
 
 Приложение: http://localhost:8000/ · Swagger: http://localhost:8000/api/docs/ · Redoc: http://localhost:8000/api/redoc/ · Schema: http://localhost:8000/api/schema/
 
@@ -209,6 +211,7 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST $BASE/api/auth/register/ \
   -H 'Content-Type: application/json' \
   -d '{"username":"e2e_user","password":"E2e-Str0ng-Pass!"}'   # 201
 
+REFRESH=$(echo "$OWNER" | python3 -c 'import sys,json;print(json.load(sys.stdin)["refresh"])')
 curl -s -o /dev/null -w '%{http_code}\n' -X POST $BASE/api/auth/token/refresh/ \
   -H 'Content-Type: application/json' \
   -d "{\"refresh\":\"$REFRESH\"}"                              # 200
@@ -225,11 +228,9 @@ curl -s -o /dev/null -w '%{http_code}\n' "$BASE/api/tasks/?is_completed=maybe" \
 curl -s -o /dev/null -w '%{http_code}\n' $BASE/api/tasks/      # 401 — без токена
 ```
 
-(Для `refresh` подставьте свой `refresh` из ответа входа: `REFRESH=$(echo "$OWNER" | python3 -c 'import sys,json;print(json.load(sys.stdin)["refresh"])')`.)
-
 ## 6. UI smoke-check
 
-Ручная браузерная проверка. Ширины: ~375 px (телефон), 768 px (планшет), ~1440 px (desktop) — горизонтальной прокрутки страницы быть не должно, формы и кнопки не должны обрезаться.
+Ручная браузерная проверка (часть сценариев автоматизирована в `tests/e2e`, раздел 8). Ширины: ~375 px (телефон), 768 px (планшет), ~1440 px (desktop) — горизонтальной прокрутки страницы быть не должно, формы и кнопки не должны обрезаться.
 
 1. `/`, `/login/`, `/register/` открываются; без входа список задач показывает приглашение войти, защищённые данные не отображаются.
 2. Вход `demo_owner` открывает список его задач; в шапке видно имя пользователя; **Выйти** очищает состояние и возвращает на `/login/`.
@@ -247,14 +248,17 @@ curl -s -o /dev/null -w '%{http_code}\n' $BASE/api/tasks/      # 401 — без 
 
 ```bash
 uv sync                     # установить зависимости (включая dev-группу)
-uv run pytest               # 60 тестов
+uv run pytest               # unit/integration: 60 тестов
+uv run pytest tests/e2e     # браузерные E2E: 22 теста (нужен запущенный приложение + Chromium)
 uv run ruff check .         # линтер
 uv run python manage.py makemigrations --check --dry-run   # миграции синхронизированы
 ```
 
-Ожидаемый результат: `60 passed`, `All checks passed!`, `No changes detected`.
+Ожидаемый результат: `60 passed`, `22 passed`, `All checks passed!`, `No changes detected`.
 
-Что покрывают тесты:
+`uv run pytest` по умолчанию запускает только unit/integration-тесты (`testpaths = ["apps", "web"]` в `pyproject.toml`); браузерные тесты запускаются явно по пути `tests/e2e`.
+
+Что покрывают unit/integration-тесты:
 
 - регистрация, выдача и обновление JWT, `/api/auth/me/`, справочник пользователей;
 - неаутентифицированный доступ к задачам и комментариям (`401`);
@@ -278,15 +282,88 @@ docker compose exec web pytest
 docker compose exec web ruff check .
 ```
 
-## 8. Полезные Docker-команды
+CI (`.github/workflows/ci.yml`) запускает обе проверки при `push` и `pull request`: unit/integration напрямую, E2E — через Docker Compose с выгрузкой артефактов Playwright при падении.
+
+## 8. Браузерные E2E-тесты (Playwright)
+
+Тесты в `tests/e2e/` открывают приложение в **настоящем headless Chromium** и проверяют сценарии пользователя, права доступа, адаптивность, темы и страницы документации API. Каждый тест использует независимый браузерный контекст и создаёт собственные данные (удаляются после теста), поэтому тесты можно запускать повторно.
+
+### 8.1. Предварительные требования
+
+- запущенное приложение (`docker compose up --build` **или** `uv run python manage.py runserver`);
+- установленные зависимости (`uv sync`);
+- установленный браузер: `uv run playwright install chromium`
+  (в Linux можно добавить `--with-deps` для системных библиотек;
+  в Docker-профиле `e2e` браузер уже входит в образ).
+
+Переменные окружения:
+
+| Переменная | Назначение | По умолчанию |
+|---|---|---|
+| `E2E_BASE_URL` | origin приложения под тестом | `http://127.0.0.1:8000` |
+| `E2E_READY_TIMEOUT` | сколько секунд ждать готовности приложения | `60` |
+
+### 8.2. Запуск локально
+
+```bash
+docker compose up --build            # в одном терминале: приложение
+uv run playwright install chromium   # однократно: браузер
+uv run pytest tests/e2e              # в другом терминале: тесты
+```
+
+Если приложение не запущено, набор завершится с понятным сообщением
+`Application is not reachable at ...` — поднимите приложение и повторите.
+
+### 8.3. Предпочтительный запуск: Docker Compose (профиль `e2e`)
+
+```bash
+docker compose --profile e2e up --build --exit-code-from e2e
+```
+
+Что происходит: собирается образ приложения и образ тестирования (`Dockerfile.e2e`, официальный образ Playwright с уже установленным Chromium); сервис `e2e` стартует **только после healthcheck сервиса `web`**, то есть после применения миграций и загрузки демо-данных; тесты обращаются к приложению по имени сервиса `http://web:8000` внутри Compose-сети; после завершения Compose возвращает ненулевой код, если упал хотя бы один тест.
+
+Очистка:
+
+```bash
+docker compose --profile e2e down
+```
+
+### 8.4. Какие сценарии покрыты
+
+| Файл | Сценарии |
+|---|---|
+| `tests/e2e/test_auth_pages.py` | страницы для анонимного пользователя, ошибка неверного пароля, обязательные поля, вход `demo_owner`, поиск демо-задачи, выход и очистка состояния, валидация и создание аккаунта |
+| `tests/e2e/test_task_workflow.py` | создание задачи через диалог (с валидацией), просмотр карточки, редактирование описания, назначение исполнителя, смена статуса в обе стороны, добавление и редактирование комментария, удаление с подтверждением, поиск/фильтр/сортировка, пустое состояние |
+| `tests/e2e/test_access_rights.py` | исполнитель меняет только статус (кнопки скрыты **и** API отвечает `403`, данные не меняются), посторонний не видит чужую задачу (`404` по detail, в списке и для комментариев), редактирование/удаление комментария только автором, запрет переназначения |
+| `tests/e2e/test_responsive_themes.py` | viewport 390×844 и 1440×900: отсутствие горизонтальной прокрутки, доступность основных действий, размер диалога; три режима темы, их визуальное отличие, сохранение после перезагрузки, реакция «Системной» на `prefers-color-scheme` |
+| `tests/e2e/test_api_docs.py` | Redoc: контент документации, загрузка схемы, локальная версия бандла без CDN, отсутствие JS-ошибок; Swagger UI smoke; валидность `/api/schema/` |
+
+Каждый тест дополнительно проверяет отсутствие необработанных JavaScript-ошибок, неожиданных ошибок консоли и сбойных сетевых запросов. Сознательно вызванные HTTP-статусы (`400`/`401`/`404`) тесты перечисляют явно в `allow_http_statuses` — любые другие ошибки консоли остаются падением.
+
+### 8.5. Отчёты, скриншоты и трассировки
+
+Настройки заданы в `pyproject.toml` (`[tool.pytest.ini_options] addopts`): скриншот при падении (`--screenshot=only-on-failure`), Playwright trace (`--tracing=retain-on-failure`) и видео (`--video=retain-on-failure`), каталог артефактов — `test-results/`.
+
+```bash
+uv run pytest tests/e2e                 # локально: артефакты в ./test-results/
+docker compose --profile e2e up --build --exit-code-from e2e   # в Compose: тот же ./test-results (bind mount)
+
+# просмотр трассировки после падения:
+uv run playwright show-trace test-results/<имя-теста>/trace.zip
+```
+
+Каталог `test-results/` добавлен в `.gitignore` и `.dockerignore` — в git он не попадает. В GitHub Actions артефакты выгружаются действием `actions/upload-artifact` при падении job'а `e2e`.
+
+## 9. Полезные Docker-команды
 
 ```bash
 docker compose up --build        # сборка и запуск (миграции + seed + сервер)
 docker compose logs -f web       # логи сервиса (Ctrl+C — выход из просмотра)
-docker compose ps                # статус контейнеров
-docker compose exec web pytest   # тесты в контейнере
+docker compose ps                # статус контейнеров (web должен быть healthy)
+docker compose exec web pytest   # unit/integration тесты в контейнере
 docker compose exec web ruff check .
 docker compose exec web python manage.py shell   # Django shell
+docker compose --profile e2e up --build --exit-code-from e2e   # браузерные E2E
 docker compose down              # остановить, данные в volume сохраняются
 docker compose down -v           # ПОЛНЫЙ СБРОС: удаляет volume с SQLite-базой
 ```
@@ -295,18 +372,18 @@ docker compose down -v           # ПОЛНЫЙ СБРОС: удаляет volum
 
 Повторный запуск после `docker compose down` (без `-v`) не создаёт дубликатов: seed использует `get_or_create` по стабильным username/заголовкам.
 
-## 9. Запуск без Docker
+## 10. Запуск без Docker
 
 **Требования:** Python 3.12+ и [uv](https://docs.astral.sh/uv/getting-started/installation/) (или обычный `pip`).
 
 ```bash
 # 1. окружение и зависимости
-uv sync                       # альтернатива без uv: python3.12 -m venv .venv && . .venv/bin/activate && pip install django djangorestframework djangorestframework-simplejwt drf-spectacular pytest pytest-django ruff
+uv sync                       # альтернатива без uv: python3.12 -m venv .venv && . .venv/bin/activate && pip install django djangorestframework djangorestframework-simplejwt drf-spectacular drf-spectacular-sidecar pytest pytest-django ruff playwright pytest-playwright
 
 # 2. переменные окружения
 cp .env.example .env          # при желании отредактируйте значения
 set -a && . ./.env && set +a  # bash/zsh: выгрузить .env в окружение
-# PowerShell: Get-Content .env | ForEach-Object { $_ } | Where-Object {$_ -notmatch '^\s*#'} | ForEach-Object { $k,$v = $_.Split('=',2); Set-Item -Path "env:$k" -Value $v }
+# PowerShell: Get-Content .env | Where-Object {$_ -notmatch '^\s*#'} | ForEach-Object { $k,$v = $_.Split('=',2); Set-Item -Path "env:$k" -Value $v }
 
 # 3. миграции и демо-данные (опционально, только для локальной разработки)
 uv run python manage.py migrate
@@ -318,19 +395,25 @@ uv run python manage.py runserver
 # 5. тесты и линтер
 uv run pytest
 uv run ruff check .
+
+# 6. браузерные E2E (однократно ставится Chromium)
+uv run playwright install chromium
+uv run pytest tests/e2e
 ```
 
-Без `.env` приложение тоже запускается: используются значения по умолчанию из `config/settings.py` (`DJANGO_DEBUG=true`, SQLite в `./data/db.sqlite3`). Переменные см. таблицу в разделе 13.
+Без `.env` приложение тоже запускается: используются значения по умолчанию из `config/settings.py` (`DJANGO_DEBUG=true`, SQLite в `./data/db.sqlite3`). Переменные см. таблицу в разделе 14.
 
 Static-файлы в development отдаёт Django напрямую (`DEBUG=true`); для сбора в один каталог есть `uv run python manage.py collectstatic` (в Compose не используется).
 
-## 10. API reference
+## 11. API reference
 
 | Документ | Адрес |
 |---|---|
 | OpenAPI schema | http://localhost:8000/api/schema/ |
 | Swagger UI | http://localhost:8000/api/docs/ |
 | Redoc | http://localhost:8000/api/redoc/ |
+
+Обе страницы документации работают полностью локально: JS-бандлы Swagger UI и Redoc отдаются из пакета `drf-spectacular-sidecar` (версия зафиксирована в `uv.lock`), внешние CDN и шрифты не используются. Redoc подключается классическим `<script>` — бандл в sidecar является UMD-сборкой, поэтому ошибки `Cannot use 'import.meta' outside a module` не возникает.
 
 Аутентификация — HTTP Bearer: `Authorization: Bearer <access token>`.
 
@@ -350,7 +433,7 @@ Static-файлы в development отдаёт Django напрямую (`DEBUG=tr
 
 Формат ошибок — стандартный DRF: `400` `{"<поле>": ["сообщение"]}` или `{"detail": [...]}`, `401`/`403` — `{"detail": "..."}`, `404` — `{"detail": "..."}`.
 
-## 11. Правила доступа
+## 12. Правила доступа
 
 | Субъект | Может |
 |---|---|
@@ -363,7 +446,7 @@ Static-файлы в development отдаёт Django напрямую (`DEBUG=tr
 
 После переназначения прежний исполнитель теряет доступ (если не является создателем). Объекты вне доступного queryset → `404`, запрещённая операция внутри набора → `403`. Правила реализованы на сервере в `apps/tasks/services.py` + `apps/tasks/selectors.py`; скрытие кнопок в UI — только UX.
 
-## 12. Структура проекта
+## 13. Структура проекта
 
 ```text
 .
@@ -373,7 +456,7 @@ Static-файлы в development отдаёт Django напрямую (`DEBUG=tr
 │   ├── users/
 │   │   ├── services.py         # регистрация пользователя
 │   │   ├── selectors.py        # справочник активных пользователей
-│   │   └── api/                # serializers, views, urls (register/token/me/users)
+│   │   ├── api/                # serializers, views, urls (register/token/me/users)
 │   │   └── tests/              # тесты аутентификации и справочника
 │   └── tasks/
 │       ├── models.py           # Task, Comment (структура и связи)
@@ -384,19 +467,25 @@ Static-файлы в development отдаёт Django напрямую (`DEBUG=tr
 │       ├── migrations/
 │       └── tests/              # тесты CRUD, доступа, комментариев, docs, seed
 ├── web/                        # только HTML page views (shell), без бизнес-логики
-├── templates/                  # base, dashboard, login, register, task_detail
+├── templates/                  # base, dashboard, login, register, task_detail,
+│                               # drf_spectacular/redoc.html (локальный шаблон Redoc)
 ├── static/css/styles.css       # дизайн-токены и компоненты, light/dark
 ├── static/js/                  # theme.js, ui.js, api.js, pages/* (vanilla JS)
+├── tests/e2e/                  # браузерные Playwright-тесты (conftest + 5 модулей)
 ├── docs/ARCHITECTURE.md        # описание реализованной архитектуры
 ├── docker/entrypoint.sh        # migrate → seed → runserver
-├── Dockerfile, compose.yaml, .dockerignore, .env.example
+├── Dockerfile                  # образ приложения
+├── Dockerfile.e2e              # образ тестов на официальном Playwright-образе
+├── compose.yaml                # сервис web (+ healthcheck) и профиль e2e
+├── .github/workflows/ci.yml    # unit-тесты, линтер и E2E при push/PR
+├── .dockerignore, .env.example, .gitignore
 ├── pyproject.toml, uv.lock, .python-version
 └── README.md
 ```
 
 Направление зависимостей: `web views → templates`, `API views → serializers/selectors/services → models`; модели ничего не импортируют из API, сервисы не знают о HTTP/DRF, selectors не формируют ответы.
 
-## 13. Конфигурация и безопасность
+## 14. Конфигурация и безопасность
 
 | Переменная | Назначение | Значение по умолчанию |
 |---|---|---|
@@ -406,47 +495,44 @@ Static-файлы в development отдаёт Django напрямую (`DEBUG=tr
 | `DJANGO_CSRF_TRUSTED_ORIGINS` | доверенные origin'ы для CSRF | пусто |
 | `DJANGO_DB_PATH` | путь к SQLite-файлу | `./data/db.sqlite3` (в Compose: `/app/data/db.sqlite3`) |
 | `SEED_DEMO_DATA` | `1` — запускать seed из entrypoint | `0` (`1` в `compose.yaml`) |
+| `E2E_BASE_URL` | origin приложения для браузерных тестов | `http://127.0.0.1:8000` (`http://web:8000` в Compose) |
+| `E2E_READY_TIMEOUT` | ожидание готовности приложения E2E-тестами, сек | `60` |
 
 Безопасность и гигиена:
 
 - `.env` в git не коммитится (см. `.gitignore`); в репозитории только `.env.example` без секретов.
-- `.dockerignore` исключает `.git`, `.venv`, кэши, `.env` и локальную БД из образа.
+- `.dockerignore` исключает `.git`, `.venv`, кэши, `.env`, локальную БД и артефакты тестов из образа.
 - Пароли хранятся только в хеше Django; в API-ответах нет ни паролей, ни хешей, ни stack trace.
 - JWT хранится в `sessionStorage` вкладки; при истечении `access` выполняется максимум одна попытка refresh и один повтор запроса, затем состояние очищается и пользователь возвращается на `/login/`. Токены не попадают в URL, HTML и логи.
 - Демо-seed заблокирован при `DEBUG=false`; демо-пароли — только для локального окружения.
 - Пользовательский текст в DOM вставляется через `textContent`/создание узлов, без `innerHTML`.
+- Страницы API-документации не ходят в сеть за бандлами и шрифтами (локальный sidecar).
 
-## 14. Известные ограничения
+## 15. Известные ограничения
 
 - SQLite и development server (`runserver`) рассчитаны на локальную разработку и проверку задания, **не для production**.
-- Compose содержит один сервис (`web`); отдельного контейнера БД, Redis, Celery и фронтенд-сервиса нет — по условию они не нужны.
+- Compose-сервис `web` — единственный сервис приложения; сервис `e2e` существует только в профиле `e2e` и нужен исключительно для тестов. Отдельного контейнера БД, Redis, Celery и фронтенд-сервиса нет — по условию они не нужны.
 - Поиск `?search=` использует `icontains`; SQLite регистронезависимо обрабатывает только ASCII, поэтому для кириллицы дополнительно перебираются варианты регистра (`lower`/`upper`/`capitalize`/`title`). Полный case-insensitive поиск для всех языков потребовал бы расширения ICU или другой СУБД.
 - Email делает необязательным, но задаёт уникальность (case-insensitive) — как требует спецификация.
 - Real-time обновления, уведомления, вложения и админ-консоль в UI не реализованы — их нет в задании.
 - Для комментариев поддерживается `PATCH`, `PUT` возвращается `405` (допускается спецификацией).
+- Браузерные тесты работают с реальной (не тестовой) базой приложения: они создают задачи с уникальными заголовками и удаляют их после себя, но зарегистрированные тестом пользователи (`e2e_*`) остаются до сброса базы (`docker compose down -v`).
 
-## 15. Статус проверки этой сборки
+## 16. Типичные ошибки и их устранение
 
-Фактически выполнено в среде разработки этой сборки:
-
-| Проверка | Команда | Результат |
+| Симптом | Причина | Решение |
 |---|---|---|
-| Тесты | `uv run pytest` | **60 passed** |
-| Линтер | `uv run ruff check .` | **All checks passed** |
-| Миграции на чистой БД | `uv run python manage.py migrate` | применены, включая `tasks.0001_initial` |
-| Нет незапрошенных миграций | `uv run python manage.py makemigrations --check --dry-run` | `No changes detected` |
-| Идемпотентность seed | `uv run python manage.py seed_demo_data` ×2 | вторая итерация не создаёт дубликатов |
-| Генерация схемы | `uv run python manage.py spectacular --file schema.yaml` | exit 0, 0 ошибок, 0 предупреждений |
-| HTTP-сценарий E2E | live `runserver` + `curl` по разделам 5.1–5.7 | все ожидаемые статусы получены (200/201/400/401/403/404) |
-| Страницы и static | `curl` по `/`, `/login/`, `/register/`, `/tasks/1/`, `/api/docs/`, `/api/redoc/`, `/api/schema/`, CSS/JS | все `200` |
-| Синтаксис JS | `node --check` по всем файлам `static/js` | OK |
+| `Error: That port is already in use` при старте | порт 8000 занят другим процессом | освободите порт (`docker compose down` или остановите старый `runserver`) и повторите запуск |
+| `Application is not reachable at ...` от E2E-тестов | приложение не запущено или ещё поднимается | запустите `docker compose up --build` (для Compose используйте профиль `e2e`) либо увеличьте `E2E_READY_TIMEOUT` |
+| `Executable doesn't exist at .../chrome-...` | не установлен браузер Chromium | `uv run playwright install chromium` (в Compose-режиме это уже сделано в `Dockerfile.e2e`) |
+| Сборка E2E-образа падает или тесты не стартуют в контейнере | версия Playwright в образе не совпадает с `uv.lock` | тег в `Dockerfile.e2e` должен соответствовать пину `playwright==` в `pyproject.toml`; после обновления зависимости пересоберите образ (`--build`) |
+| E2E-падение: `Failed to load resource ... 404` на странице документации | собраны не все static-файлы или старый процесс | перезапустите сервер после изменения шаблонов/настроек (шаблоны Django кэшируются процессом) |
+| `/api/redoc/` пуст или показывает ошибку в консоли | использовался CDN-бандл Redoc другой major-версии | в проекте используется локальный sidecar-бандл (`REDOC_DIST="SIDECAR"`); проверьте `drf-spectacular-sidecar` в зависимостях и `templates/drf_spectacular/redoc.html` |
+| `manage.py migrate` не может создать файл БД | каталог для SQLite не существует | используйте путь по умолчанию `./data/db.sqlite3` (каталог создаётся автоматически) или задайте существующий `DJANGO_DB_PATH` |
+| Seed отказался работать | `DJANGO_DEBUG=false` | демо-данные — только для локальной разработки; включите `DJANGO_DEBUG=true` |
+| Тесты видят устаревший UI после правки | development server запущен без перезагрузки | перезапустите `runserver` (запускайте с `--reload` либо без `--noreload`, если меняете Python-код/настройки) |
 
-**Не выполнялось в этой среде** (ограничения окружения: нет Docker и нет браузера):
-
-- `docker compose up --build` и повторный запуск/`down -v` — команды приведены по фактическим `compose.yaml`/`docker/entrypoint.sh`, но в контейнерах не запускались;
-- ручной браузерный UI smoke-check из раздела 6 — выполняется проверяющим; серверная часть сценариев (API, страницы, статика) проверена HTTP-запросами, логика тем — кодом и статической проверкой.
-
-## 16. Документация
+## 17. Документация
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — реализованная архитектура, слои и потоки данных.
 - [`spec/`](spec/) — исходные документы требований (`SPEC.md`, `ARCHITECTURE.md`, `LOCAL_DEVELOPMENT.md`, `FRONTEND.md`, `DOCUMENTATION.md`).

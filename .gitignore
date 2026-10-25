@@ -21,6 +21,9 @@ db.sqlite3
 # Collected static files
 staticfiles/
 
+# Test artifacts (Playwright screenshots, traces, videos)
+test-results/
+
 # Editors / OS
 .idea/
 .vscode/

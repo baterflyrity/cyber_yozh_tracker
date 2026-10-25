@@ -177,7 +177,9 @@
     }
     UI.setLoading(editSaveBtn, true, 'Сохраняем…');
     API.request('/api/tasks/' + taskId + '/', { method: 'PATCH', body: payload })
-      .then(function () {
+      .then(function (updated) {
+        // Re-render from the server response so the page never shows stale data.
+        task = updated;
         UI.closeDialog(editDialog);
         UI.toast('Задача обновлена', 'success');
         renderTask();

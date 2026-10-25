@@ -61,6 +61,11 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
+/* The `hidden` attribute must always win over component display rules
+   (e.g. `.btn { display: inline-flex }`), otherwise "hidden" controls stay
+   visible — the UA rule alone is not enough because author styles beat it. */
+[hidden] { display: none !important; }
+
 html, body { height: 100%; }
 
 body {

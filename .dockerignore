@@ -20,5 +20,8 @@ data
 db.sqlite3
 staticfiles
 
+# Test artifacts
+test-results
+
 # Docs not needed inside the image (README and spec/ stay in the repo)
 .spec-backups

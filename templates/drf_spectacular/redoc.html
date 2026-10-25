@@ -1,0 +1,30 @@
+{# Local Redoc shell: no external fonts/CDN, bundle from the version-pinned drf-spectacular-sidecar package (REDOC_DIST="SIDECAR"), classic <script> because the bundle is a UMD build (Redoc CE 2.x). #}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    {% block head %}
+    <title>{{ title|default:"Redoc" }}</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      {# Redoc doesn't change outer page styles. #}
+      body { margin: 0; padding: 0; }
+    </style>
+    {% endblock head %}
+  </head>
+  <body>
+    {% block body %}
+    {% if settings %}
+    <div id="redoc-container"></div>
+    <script src="{{ redoc_standalone }}"></script>
+    <script>
+      const redocSettings = {{ settings|safe }};
+      Redoc.init("{{ schema_url }}", redocSettings, document.getElementById('redoc-container'))
+    </script>
+    {% else %}
+    <redoc spec-url="{{ schema_url }}"></redoc>
+    <script src="{{ redoc_standalone }}"></script>
+    {% endif %}
+    {% endblock body %}
+  </body>
+</html>

@@ -1,5 +1,8 @@
 # Local development stack: a single Django service backed by SQLite
-# in a named volume. Not intended for production.
+# in a named volume, plus an optional browser E2E runner. Not production.
+#
+#   docker compose up --build                                # application only
+#   docker compose --profile e2e up --build --exit-code-from e2e   # app + E2E
 services:
   web:
     build: .
@@ -16,6 +19,36 @@ services:
       SEED_DEMO_DATA: "1"
     volumes:
       - cyberyozh_data:/app/data
+    # E2E tests must not start before migrations and demo data are ready.
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/schema/', timeout=5)",
+        ]
+      interval: 5s
+      timeout: 10s
+      retries: 36
+      start_period: 20s
+
+  e2e:
+    profiles: ["e2e"]
+    build:
+      context: .
+      dockerfile: Dockerfile.e2e
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      # Application origin inside the Compose network, never localhost.
+      E2E_BASE_URL: http://web:8000
+      E2E_READY_TIMEOUT: "120"
+    volumes:
+      # Screenshots/traces/videos of failed tests land in ./test-results.
+      - ./test-results:/app/test-results
+    command: ["uv", "run", "--no-sync", "pytest", "tests/e2e"]
 
 volumes:
   cyberyozh_data:
