@@ -1,0 +1,21 @@
+# Local development stack: a single Django service backed by SQLite
+# in a named volume. Not intended for production.
+services:
+  web:
+    build: .
+    container_name: cyberyozh-web
+    ports:
+      - "8000:8000"
+    environment:
+      DJANGO_DEBUG: "true"
+      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,0.0.0.0"
+      DJANGO_CSRF_TRUSTED_ORIGINS: "http://localhost:8000,http://127.0.0.1:8000"
+      # SQLite lives in a named volume, not in the container layer.
+      DJANGO_DB_PATH: /app/data/db.sqlite3
+      # Load demo users/tasks/comments on start (dev-only, idempotent).
+      SEED_DEMO_DATA: "1"
+    volumes:
+      - cyberyozh_data:/app/data
+
+volumes:
+  cyberyozh_data:

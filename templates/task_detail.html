@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Задача — CyberYozh{% endblock %}
+
+{% block content %}
+<p id="detail-status" class="status-line" role="status" aria-live="polite"></p>
+
+<a class="link back-link" href="/">← К списку задач</a>
+
+<article id="task-detail" class="detail" hidden>
+  <header class="detail-head">
+    <div class="detail-title-row">
+      <h1 id="detail-title">—</h1>
+      <span id="detail-status-badge" class="badge">—</span>
+    </div>
+    <p id="detail-description" class="detail-description"></p>
+    <dl class="meta">
+      <div><dt>Создатель</dt><dd id="detail-author">—</dd></div>
+      <div><dt>Исполнитель</dt><dd id="detail-assignee">—</dd></div>
+      <div><dt>Создана</dt><dd id="detail-created">—</dd></div>
+      <div><dt>Изменена</dt><dd id="detail-updated">—</dd></div>
+    </dl>
+  </header>
+
+  <section class="detail-actions" aria-label="Действия с задачей">
+    <button id="toggle-status-btn" class="btn btn-primary" type="button" hidden>
+      Отметить выполненной
+    </button>
+    <button id="edit-task-btn" class="btn btn-quiet" type="button" hidden>Редактировать</button>
+    <button id="delete-task-btn" class="btn btn-danger" type="button" hidden>Удалить</button>
+  </section>
+
+  <section class="assign-block" id="assign-block" hidden aria-labelledby="assign-title">
+    <h2 id="assign-title">Назначение исполнителя</h2>
+    <form id="assign-form" class="form form-inline">
+      <div class="field field-grow">
+        <label class="visually-hidden" for="assign-select">Исполнитель</label>
+        <select class="control" id="assign-select">
+          <option value="">— не назначен —</option>
+        </select>
+      </div>
+      <button class="btn btn-quiet" type="submit">Сохранить назначение</button>
+    </form>
+    <p class="field-error" id="assign-error" hidden></p>
+  </section>
+
+  <section class="comments" aria-labelledby="comments-title">
+    <h2 id="comments-title">Комментарии</h2>
+    <ul id="comment-list" class="comment-list"></ul>
+    <p id="comments-empty" class="muted">Комментариев пока нет.</p>
+
+    <form id="comment-form" class="form" novalidate>
+      <div class="field">
+        <label for="comment-body">Новый комментарий</label>
+        <textarea class="control" id="comment-body" rows="3" maxlength="5000"
+                  required aria-describedby="comment-error"></textarea>
+        <p class="field-error" id="comment-error" data-error-for="body" hidden></p>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" type="submit" id="comment-submit">Добавить</button>
+      </div>
+    </form>
+  </section>
+</article>
+
+<dialog id="edit-dialog" class="dialog" aria-labelledby="edit-dialog-title">
+  <form id="edit-form" class="form" method="dialog" novalidate>
+    <h2 id="edit-dialog-title">Редактирование задачи</h2>
+    <div class="field">
+      <label for="edit-title">Заголовок</label>
+      <input class="control" id="edit-title" type="text" maxlength="200" required
+             aria-describedby="edit-title-error">
+      <p class="field-error" id="edit-title-error" data-error-for="title" hidden></p>
+    </div>
+    <div class="field">
+      <label for="edit-description">Описание</label>
+      <textarea class="control" id="edit-description" rows="4"
+                aria-describedby="edit-description-error"></textarea>
+      <p class="field-error" id="edit-description-error" data-error-for="description" hidden></p>
+    </div>
+    <p id="edit-form-error" class="form-error" role="alert" hidden></p>
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit" id="edit-save-btn">Сохранить</button>
+      <button class="btn btn-quiet" type="button" id="edit-cancel-btn">Отмена</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="confirm-dialog" class="dialog dialog-small" aria-labelledby="confirm-title">
+  <h2 id="confirm-title">Подтверждение</h2>
+  <p id="confirm-text" class="muted"></p>
+  <div class="form-actions">
+    <button class="btn btn-danger" type="button" id="confirm-ok-btn">Удалить</button>
+    <button class="btn btn-quiet" type="button" id="confirm-cancel-btn">Отмена</button>
+  </div>
+</dialog>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.__TASK_ID__ = {{ task_id|default:0 }};
+</script>
+<script src="{% static 'js/pages/task.js' %}"></script>
+{% endblock %}

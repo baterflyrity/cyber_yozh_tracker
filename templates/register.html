@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Регистрация — CyberYozh{% endblock %}
+
+{% block content %}
+<section class="auth-card card" aria-labelledby="register-title">
+  <h1 id="register-title">Регистрация</h1>
+  <p class="muted">Создайте аккаунт, чтобы работать с задачами.</p>
+
+  <form id="register-form" class="form" novalidate>
+    <div class="field">
+      <label for="username">Имя пользователя</label>
+      <input class="control" id="username" name="username" type="text"
+             autocomplete="username" required minlength="1" autofocus
+             aria-describedby="register-error">
+      <p class="field-error" data-error-for="username" hidden></p>
+    </div>
+    <div class="field">
+      <label for="email">Email <span class="muted">(необязательно)</span></label>
+      <input class="control" id="email" name="email" type="email"
+             autocomplete="email" aria-describedby="register-error">
+      <p class="field-error" data-error-for="email" hidden></p>
+    </div>
+    <div class="field">
+      <label for="password">Пароль</label>
+      <input class="control" id="password" name="password" type="password"
+             autocomplete="new-password" required aria-describedby="password-hint register-error">
+      <p class="hint" id="password-hint">Минимум 8 символов, не только цифры.</p>
+      <p class="field-error" data-error-for="password" hidden></p>
+    </div>
+
+    <p id="register-error" class="form-error" role="alert" hidden></p>
+
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit" id="register-submit">Зарегистрироваться</button>
+      <a class="link" href="/login/">Уже есть аккаунт</a>
+    </div>
+  </form>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/pages/register.js' %}"></script>
+{% endblock %}

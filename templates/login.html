@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Вход — CyberYozh{% endblock %}
+
+{% block content %}
+<section class="auth-card card" aria-labelledby="login-title">
+  <h1 id="login-title">Вход</h1>
+  <p class="muted">Войдите, чтобы увидеть свои задачи.</p>
+
+  <form id="login-form" class="form" novalidate>
+    <div class="field">
+      <label for="username">Имя пользователя</label>
+      <input class="control" id="username" name="username" type="text"
+             autocomplete="username" required autofocus aria-describedby="login-error">
+    </div>
+    <div class="field">
+      <label for="password">Пароль</label>
+      <input class="control" id="password" name="password" type="password"
+             autocomplete="current-password" required aria-describedby="login-error">
+    </div>
+
+    <p id="login-error" class="form-error" role="alert" hidden></p>
+
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit" id="login-submit">Войти</button>
+      <a class="link" href="/register/">Создать аккаунт</a>
+    </div>
+  </form>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/pages/login.js' %}"></script>
+{% endblock %}

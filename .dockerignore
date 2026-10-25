@@ -1,0 +1,24 @@
+# VCS and CI
+.git
+.gitignore
+.github
+
+# Python caches and environments
+.venv
+venv
+**/__pycache__
+*.py[cod]
+.pytest_cache
+.ruff_cache
+
+# Local data and secrets
+.env
+.env.*
+!.env.example
+data
+*.sqlite3
+db.sqlite3
+staticfiles
+
+# Docs not needed inside the image (README and spec/ stay in the repo)
+.spec-backups

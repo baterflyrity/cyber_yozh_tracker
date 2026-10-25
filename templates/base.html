@@ -1,0 +1,60 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ru" data-theme="light" data-theme-mode="system">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>{% block title %}CyberYozh — менеджер задач{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <script>
+    /* Apply the saved theme mode before first paint to avoid a light flash. */
+    (function () {
+      var mode = null;
+      try { mode = localStorage.getItem('cyberyozh.theme'); } catch (e) { mode = null; }
+      if (mode !== 'light' && mode !== 'dark' && mode !== 'system') { mode = 'system'; }
+      var resolved = mode;
+      if (mode === 'system') {
+        resolved = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+          ? 'dark' : 'light';
+      }
+      document.documentElement.dataset.theme = resolved;
+      document.documentElement.dataset.themeMode = mode;
+    })();
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Перейти к содержимому</a>
+
+  <header class="app-header">
+    <div class="container header-inner">
+      <a class="brand" href="/">CyberYozh<span class="brand-sub">&nbsp;Task Manager</span></a>
+      <div class="header-actions">
+        <div class="theme-picker">
+          <label class="visually-hidden" for="theme-select">Тема оформления</label>
+          <select id="theme-select" class="control" aria-label="Тема оформления">
+            <option value="system">Системная</option>
+            <option value="light">Светлая</option>
+            <option value="dark">Тёмная</option>
+          </select>
+        </div>
+        <span id="current-user" class="chip" hidden></span>
+        <a id="login-link" class="btn btn-quiet" href="/login/">Войти</a>
+        <a id="register-link" class="btn btn-quiet" href="/register/">Регистрация</a>
+        <button id="logout-btn" class="btn btn-quiet" type="button" hidden>Выйти</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" class="container main">
+    {% block content %}{% endblock %}
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="{% static 'js/theme.js' %}"></script>
+  <script src="{% static 'js/ui.js' %}"></script>
+  <script src="{% static 'js/api.js' %}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

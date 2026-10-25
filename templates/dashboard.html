@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Задачи — CyberYozh{% endblock %}
+
+{% block content %}
+<section class="page-head">
+  <div>
+    <h1 id="page-title">Задачи</h1>
+    <p class="muted" id="page-subtitle">Задачи, доступные вам как создателю или исполнителю.</p>
+  </div>
+  <button id="create-task-btn" class="btn btn-primary" type="button">Создать задачу</button>
+</section>
+
+<form id="filters" class="filters" role="search" aria-label="Фильтры задач">
+  <div class="field field-grow">
+    <label for="search-input">Поиск</label>
+    <input class="control" id="search-input" type="search"
+           placeholder="Заголовок или описание" autocomplete="off">
+  </div>
+  <div class="field">
+    <label for="status-filter">Статус</label>
+    <select class="control" id="status-filter">
+      <option value="">Все</option>
+      <option value="false">Не выполнена</option>
+      <option value="true">Выполнена</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="ordering-select">Сортировка</label>
+    <select class="control" id="ordering-select">
+      <option value="-updated_at">Сначала изменённые</option>
+      <option value="updated_at">Давно изменённые</option>
+      <option value="-created_at">Сначала новые</option>
+      <option value="created_at">Сначала старые</option>
+    </select>
+  </div>
+</form>
+
+<p id="list-status" class="status-line" role="status" aria-live="polite"></p>
+
+<div id="task-list" class="task-grid" aria-busy="false"></div>
+
+<div id="empty-state" class="empty-state" hidden>
+  <p class="empty-title">Задач пока нет</p>
+  <p class="muted">Создайте задачу или измените фильтры поиска.</p>
+</div>
+
+<dialog id="task-dialog" class="dialog" aria-labelledby="task-dialog-title">
+  <form id="task-form" class="form" method="dialog" novalidate>
+    <h2 id="task-dialog-title">Новая задача</h2>
+
+    <div class="field">
+      <label for="task-title">Заголовок</label>
+      <input class="control" id="task-title" name="title" type="text" maxlength="200" required
+             aria-describedby="task-title-error">
+      <p class="field-error" id="task-title-error" data-error-for="title" hidden></p>
+    </div>
+
+    <div class="field">
+      <label for="task-description">Описание</label>
+      <textarea class="control" id="task-description" name="description" rows="4"
+                aria-describedby="task-description-error"></textarea>
+      <p class="field-error" id="task-description-error" data-error-for="description" hidden></p>
+    </div>
+
+    <div class="field">
+      <label for="task-assignee">Исполнитель</label>
+      <select class="control" id="task-assignee" name="assigned_to"
+              aria-describedby="task-assignee-error">
+        <option value="">— не назначен —</option>
+      </select>
+      <p class="field-error" id="task-assignee-error" data-error-for="assigned_to" hidden></p>
+    </div>
+
+    <p id="task-form-error" class="form-error" role="alert" hidden></p>
+
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit" id="task-save-btn">Сохранить</button>
+      <button class="btn btn-quiet" type="button" id="task-cancel-btn">Отмена</button>
+    </div>
+  </form>
+</dialog>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/pages/dashboard.js' %}"></script>
+{% endblock %}
