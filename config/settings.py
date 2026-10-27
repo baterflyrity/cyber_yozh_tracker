@@ -30,6 +30,14 @@ CSRF_TRUSTED_ORIGINS = [
     if origin.strip()
 ]
 
+# Cross-Origin-Opener-Policy is only honoured by browsers on trustworthy
+# origins (https:// or localhost). Development runs over plain HTTP, and the
+# Compose E2E origin is `http://web:8000`, where Chromium ignores the header
+# and logs a console error that the browser-cleanliness E2E assertions flag.
+# Sending a header that cannot take effect would only add noise, so keep COOP
+# for non-debug deployments and skip it in development.
+SECURE_CROSS_ORIGIN_OPENER_POLICY = None if DEBUG else "same-origin"
+
 if not DEBUG and SECRET_KEY == INSECURE_DEV_KEY:
     raise ImproperlyConfigured(
         "DJANGO_SECRET_KEY must be set to a real value when DJANGO_DEBUG is false."

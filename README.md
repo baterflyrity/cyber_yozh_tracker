@@ -70,7 +70,16 @@ cd cyber_yozh_tracker
 
 # 2. собрать образы и запустить приложение
 docker compose up --build
+
+# 3. (опционально) другой host-порт, если 8000 занят — например http://localhost:8001/
+APP_PORT=8001 docker compose up --build
 ```
+
+Host-порт настраивается переменной `APP_PORT` (по умолчанию `8000`, см. раздел 14):
+`"${APP_PORT:-8000}:8000"` в `compose.yaml`. Внутри контейнера приложение всегда
+слушает `0.0.0.0:8000`; Compose-имена контейнеров не зафиксированы (`container_name`
+отсутствует), поэтому обычный запуск и изолированный тестовый проект можно
+поднимать параллельно.
 
 Что происходит при старте (см. `docker/entrypoint.sh`):
 
@@ -82,6 +91,15 @@ docker compose up --build
 Ожидаемое состояние: сервис `web` запущен и проходит healthcheck (`docker compose ps` показывает `healthy`), в логах видны строки `Applying database migrations`, `Demo data is up to date.` и `Starting development server on 0.0.0.0:8000`, а `curl -I http://localhost:8000/` возвращает `HTTP/1.1 200 OK`.
 
 Приложение: http://localhost:8000/ · Swagger: http://localhost:8000/api/docs/ · Redoc: http://localhost:8000/api/redoc/ · Schema: http://localhost:8000/api/schema/
+
+При `APP_PORT=8001` замените `8000` на `8001` в host-адресах. Внутренний адрес
+`http://web:8000` (для E2E-тестов внутри Compose-сети) от `APP_PORT` не зависит.
+Для проверки готовности из хоста:
+
+```bash
+docker compose ps                                          # web должен быть healthy
+curl --fail --show-error http://127.0.0.1:${APP_PORT:-8000}/api/schema/ -o /dev/null
+```
 
 ## 4. Демо-данные
 
@@ -254,7 +272,7 @@ uv run ruff check .         # линтер
 uv run python manage.py makemigrations --check --dry-run   # миграции синхронизированы
 ```
 
-Ожидаемый результат: `60 passed`, `22 passed`, `All checks passed!`, `No changes detected`.
+Ожидаемый результат: `60 passed` (+16 subtests), `22 passed`, `All checks passed!`, `No changes detected` — проверено в этом окружении: `pytest` → exit 0, `ruff check .` → exit 0, `makemigrations --check --dry-run` → exit 0, изолированный Compose E2E → `22 passed`, exit 0 (два последовательных прогона на чистом volume).
 
 `uv run pytest` по умолчанию запускает только unit/integration-тесты (`testpaths = ["apps", "web"]` в `pyproject.toml`); браузерные тесты запускаются явно по пути `tests/e2e`.
 
@@ -316,17 +334,45 @@ uv run pytest tests/e2e              # в другом терминале: те�
 
 ### 8.3. Предпочтительный запуск: Docker Compose (профиль `e2e`)
 
+Обычный запуск (приложение + тесты в одном проекте):
+
 ```bash
 docker compose --profile e2e up --build --exit-code-from e2e
 ```
 
-Что происходит: собирается образ приложения и образ тестирования (`Dockerfile.e2e`, официальный образ Playwright с уже установленным Chromium); сервис `e2e` стартует **только после healthcheck сервиса `web`**, то есть после применения миграций и загрузки демо-данных; тесты обращаются к приложению по имени сервиса `http://web:8000` внутри Compose-сети; после завершения Compose возвращает ненулевой код, если упал хотя бы один тест.
+Что происходит: собирается образ приложения и образ тестирования (`Dockerfile.e2e`, официальный образ Playwright `mcr.microsoft.com/playwright/python:v1.64.1-noble` с уже установленным headless Chromium — тег совпадает с пином `playwright==1.64.1` в `pyproject.toml`/`uv.lock`); сервис `e2e` стартует **только после healthcheck сервиса `web`** (`condition: service_healthy`), то есть после применения миграций и загрузки демо-данных; тесты обращаются к приложению по имени сервиса `E2E_BASE_URL=http://web:8000` внутри Compose-сети; `--exit-code-from e2e` возвращает код pytest (падение тестов не превращается в успех).
 
-Очистка:
+**Изолированный прогон** (рекомендуется: отдельное имя проекта, чистый project-scoped volume и настраиваемый порт — не трогает обычный локальный стек):
 
 ```bash
-docker compose --profile e2e down
+mkdir -p test-results
+
+# Очистить только предыдущий тестовый проект и его volume
+# (имя проекта cyberyozh-e2e зарезервировано только для тестов).
+docker compose -p cyberyozh-e2e --profile e2e down -v --remove-orphans
+
+# Собрать образы, поднять web, дождаться healthcheck, запустить Chromium и pytest.
+APP_PORT=8001 docker compose -p cyberyozh-e2e --profile e2e up \
+  --build --abort-on-container-exit --exit-code-from e2e
 ```
+
+Успех — это фактический exit code `0` и строка `22 passed` в выводе pytest (проверено дважды подряд на чистом volume). Порт `8001` выбирается свободным из диапазона 8000–8010 и нужен только для доступа к UI снаружи; внутренний адрес тестов `http://web:8000` от него не зависит.
+
+Если прогон упал — **до очистки** соберите диагностику:
+
+```bash
+docker compose -p cyberyozh-e2e --profile e2e ps -a
+docker compose -p cyberyozh-e2e --profile e2e logs --no-color web e2e
+find test-results -maxdepth 4 -type f -print   # скриншоты/трассировки упавших тестов
+```
+
+Очистка (только выделенный тестовый проект; volume с данными обычного запуска не затрагивается):
+
+```bash
+docker compose -p cyberyozh-e2e --profile e2e down -v --remove-orphans
+```
+
+Обычный запуск останавливается без удаления данных: `docker compose --profile e2e down` (volume с SQLite сохраняется, `down -v` — удаляет).
 
 ### 8.4. Какие сценарии покрыты
 
@@ -354,16 +400,22 @@ uv run playwright show-trace test-results/<имя-теста>/trace.zip
 
 Каталог `test-results/` добавлен в `.gitignore` и `.dockerignore` — в git он не попадает. В GitHub Actions артефакты выгружаются действием `actions/upload-artifact` при падении job'а `e2e`.
 
+> ⚠️ pytest-playwright **удаляет весь каталог `test-results/` в начале каждого прогона** (`delete_output_dir`). Собирайте скриншоты/трассировки сразу после падения и до следующего запуска. Сессионные логи Compose/pytest держите вне этого каталога — в `logs/` (в `.gitignore`).
+
 ## 9. Полезные Docker-команды
 
 ```bash
 docker compose up --build        # сборка и запуск (миграции + seed + сервер)
+APP_PORT=8001 docker compose up --build -d   # то же на другом host-порту
 docker compose logs -f web       # логи сервиса (Ctrl+C — выход из просмотра)
 docker compose ps                # статус контейнеров (web должен быть healthy)
 docker compose exec web pytest   # unit/integration тесты в контейнере
 docker compose exec web ruff check .
 docker compose exec web python manage.py shell   # Django shell
 docker compose --profile e2e up --build --exit-code-from e2e   # браузерные E2E
+# изолированный E2E-прогон на чистом volume (см. раздел 8.3):
+docker compose -p cyberyozh-e2e --profile e2e down -v --remove-orphans
+APP_PORT=8001 docker compose -p cyberyozh-e2e --profile e2e up --build --abort-on-container-exit --exit-code-from e2e
 docker compose down              # остановить, данные в volume сохраняются
 docker compose down -v           # ПОЛНЫЙ СБРОС: удаляет volume с SQLite-базой
 ```
@@ -489,9 +541,10 @@ Static-файлы в development отдаёт Django напрямую (`DEBUG=tr
 
 | Переменная | Назначение | Значение по умолчанию |
 |---|---|---|
+| `APP_PORT` | host-порт приложения в Compose (`${APP_PORT:-8000}:8000`) | `8000` |
 | `DJANGO_DEBUG` | режим отладки; `false` блокирует seed и требует настоящего ключа | `true` |
 | `DJANGO_SECRET_KEY` | секретный ключ Django | небезопасный dev-ключ (допустимо только при `DEBUG=true`) |
-| `DJANGO_ALLOWED_HOSTS` | список хостов через запятую | `localhost,127.0.0.1` |
+| `DJANGO_ALLOWED_HOSTS` | список хостов через запятую | `localhost,127.0.0.1` (в Compose дополнительно `0.0.0.0,web` — имя сервиса в Compose-сети, без него E2E получает `400 DisallowedHost`) |
 | `DJANGO_CSRF_TRUSTED_ORIGINS` | доверенные origin'ы для CSRF | пусто |
 | `DJANGO_DB_PATH` | путь к SQLite-файлу | `./data/db.sqlite3` (в Compose: `/app/data/db.sqlite3`) |
 | `SEED_DEMO_DATA` | `1` — запускать seed из entrypoint | `0` (`1` в `compose.yaml`) |
@@ -507,6 +560,7 @@ Static-файлы в development отдаёт Django напрямую (`DEBUG=tr
 - Демо-seed заблокирован при `DEBUG=false`; демо-пароли — только для локального окружения.
 - Пользовательский текст в DOM вставляется через `textContent`/создание узлов, без `innerHTML`.
 - Страницы API-документации не ходят в сеть за бандлами и шрифтами (локальный sidecar).
+- В dev-режиме (`DJANGO_DEBUG=true`) не отправляется заголовок `Cross-Origin-Opener-Policy`: браузеры применяют его только на доверенных origin'ах (`https://` или `localhost`), а локальный Compose отдаёт приложение по `http://web:8000`, где Chromium игнорирует заголовок и пишет ошибку в консоль (ею падают E2E-проверки чистоты консоли). При `DJANGO_DEBUG=false` COOP отправляется как обычно (`same-origin`).
 
 ## 15. Известные ограничения
 
@@ -522,7 +576,9 @@ Static-файлы в development отдаёт Django напрямую (`DEBUG=tr
 
 | Симптом | Причина | Решение |
 |---|---|---|
-| `Error: That port is already in use` при старте | порт 8000 занят другим процессом | освободите порт (`docker compose down` или остановите старый `runserver`) и повторите запуск |
+| `Error: That port is already in use` при старте | порт 8000 занят другим процессом | освободите порт (`docker compose down` или остановите старый `runserver`) либо запустите на другом: `APP_PORT=8001 docker compose up --build` |
+| E2E: `Application is not reachable at http://web:8000 ... HTTP Error 400: Bad Request` | в `DJANGO_ALLOWED_HOSTS` нет имени сервиса `web` — Django отклоняет `Host: web:8000` (`DisallowedHost`) | добавьте `web` в `DJANGO_ALLOWED_HOSTS` (в `compose.yaml` уже: `localhost,127.0.0.1,0.0.0.0,web`) и перезапустите `--build` |
+| E2E падают с console error `The Cross-Origin-Opener-Policy header has been ignored...` | Django шлёт COOP, а origin `http://web:8000` недоверенный — Chromium игнорирует заголовок и логирует ошибку | в dev COOP отключён (`SECURE_CROSS_ORIGIN_OPENER_POLICY = None if DEBUG` в `config/settings.py`); в production при `DEBUG=false` заголовок остаётся |
 | `Application is not reachable at ...` от E2E-тестов | приложение не запущено или ещё поднимается | запустите `docker compose up --build` (для Compose используйте профиль `e2e`) либо увеличьте `E2E_READY_TIMEOUT` |
 | `Executable doesn't exist at .../chrome-...` | не установлен браузер Chromium | `uv run playwright install chromium` (в Compose-режиме это уже сделано в `Dockerfile.e2e`) |
 | Сборка E2E-образа падает или тесты не стартуют в контейнере | версия Playwright в образе не совпадает с `uv.lock` | тег в `Dockerfile.e2e` должен соответствовать пину `playwright==` в `pyproject.toml`; после обновления зависимости пересоберите образ (`--build`) |

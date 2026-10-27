@@ -21,8 +21,12 @@ db.sqlite3
 # Collected static files
 staticfiles/
 
-# Test artifacts (Playwright screenshots, traces, videos)
+# Test artifacts (Playwright screenshots, traces, videos).
+# NOTE: pytest-playwright deletes the whole --output dir at session start,
+# so diagnostic logs must live outside of it.
 test-results/
+# Session diagnostic logs (docker compose output, test runs)
+logs/
 
 # Editors / OS
 .idea/

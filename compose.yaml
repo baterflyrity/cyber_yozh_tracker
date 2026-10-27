@@ -6,13 +6,17 @@
 services:
   web:
     build: .
-    container_name: cyberyozh-web
+    # No fixed container_name: Compose prefixes names with the project name,
+    # which keeps isolated runs (e.g. -p cyberyozh-e2e) conflict-free.
     ports:
-      - "8000:8000"
+      # Host port is configurable: APP_PORT=8001 docker compose up ...
+      - "${APP_PORT:-8000}:8000"
     environment:
       DJANGO_DEBUG: "true"
-      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,0.0.0.0"
-      DJANGO_CSRF_TRUSTED_ORIGINS: "http://localhost:8000,http://127.0.0.1:8000"
+      # `web` is the Compose DNS name used by the e2e service; without it
+      # Django rejects requests from the test container with 400 DisallowedHost.
+      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,0.0.0.0,web"
+      DJANGO_CSRF_TRUSTED_ORIGINS: "http://localhost:${APP_PORT:-8000},http://127.0.0.1:${APP_PORT:-8000}"
       # SQLite lives in a named volume, not in the container layer.
       DJANGO_DB_PATH: /app/data/db.sqlite3
       # Load demo users/tasks/comments on start (dev-only, idempotent).

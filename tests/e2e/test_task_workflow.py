@@ -41,6 +41,11 @@ def test_owner_creates_task_through_the_dialog(page, ui, api, owner_token, asser
     assert task["created_by"]["username"] == DEMO_USERS["owner"][0]
     assert task["assigned_to"]["username"] == DEMO_USERS["worker"][0]
 
+    # The suite runs against the real application database, so remove the task
+    # created through the UI to keep repeated runs free of leftovers.
+    deleted = api.request("DELETE", f"/api/tasks/{task['id']}/", token=owner_token)
+    assert deleted.status == 204, deleted.text()
+
     assert_clean_browser()
 
 

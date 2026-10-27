@@ -4,7 +4,13 @@
 
 Текущий код приложения находится в репозитории `https://github.com/baterflyrity/cyber_yozh_tracker`. Агент работает в новом окружении, без истории предыдущей сессии, из каталога `/app/cyber_yozh_tracker`. Окружение предоставляет Docker, Docker Compose и диапазон публикуемых портов 8000–8010. Эти предпосылки нужно подтвердить, а не считать бесспорными: `pwd`, `git rev-parse --show-toplevel`, `docker version`, `docker compose version`, `docker info`.
 
-Старый агент сообщал, что браузерные тесты в Compose не запускаются. Конкретная первопричина ещё не подтверждена. Нельзя заранее утверждать, что проблема заключается в Playwright, Docker, зависимости, healthcheck или порте: сначала необходимо воспроизвести сбой и сохранить полный вывод.
+Старый агент сообщал, что браузерные тесты в Compose не запускаются. На момент текущей сессии сбой воспроизведён и первопричины подтверждены логами (см. «Подтверждённые первопричины» ниже); исходный вывод сохранён в `logs/repro-disallowedhost.log` (все логи сессии — в `logs/`, каталог в `.gitignore`; держать их в `test-results/` нельзя — pytest-playwright удаляет этот каталог в начале каждого прогона). Нельзя заранее утверждать о новой проблеме в Playwright, Docker, зависимостях или healthcheck: сначала воспроизвести сбой и сохранить полный вывод.
+
+## Подтверждённые первопричины (текущая сессия)
+
+1. **`DisallowedHost` (этап: тесты).** `compose.yaml` задавал `DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0` без имени сервиса `web`. Healthcheck `web` ходит на `127.0.0.1` и проходил, а запросы `e2e` на `http://web:8000` отклонялись с `400 Bad Request` (`django.core.exceptions.DisallowedHost: Invalid HTTP_HOST header: 'web:8000'`). Все 22 теста падали в фикстуре `app_ready` с `RuntimeError: Application is not reachable ... HTTP Error 400` (exit code 1). Исправление: `web` добавлен в `DJANGO_ALLOWED_HOSTS`.
+2. **Игнорируемый `Cross-Origin-Opener-Policy` (этап: assertions).** После исправления Host'а 14 из 22 тестов падали на `assert_clean_browser` с console error Chromium: «The Cross-Origin-Opener-Policy header has been ignored...» — Django `SecurityMiddleware` по умолчанию шлёт COOP, но origin `http://web:8000` недоверенный, и Chromium игнорирует заголовок, логируя ошибку. Исправление: `SECURE_CROSS_ORIGIN_OPENER_POLICY = None` при `DEBUG=true` в `config/settings.py` (в production заголовок остаётся). Тесты не ослаблялись.
+3. **Фиксированные `container_name` и порт.** Убран `container_name: cyberyozh-web`, порт сделан `${APP_PORT:-8000}:8000` — иначе изолированный `-p cyberyozh-e2e` конфликтует с обычным запуском.
 
 ## Обязательный подход
 

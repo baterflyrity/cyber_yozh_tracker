@@ -133,7 +133,7 @@ docker compose -p cyberyozh-e2e --profile e2e logs --no-color
 docker compose -p cyberyozh-e2e --profile e2e down -v --remove-orphans
 ```
 
-Если команда упала, прежде чем очищать контейнеры, сохрани stdout/stderr, `docker compose ... ps -a`, `docker compose ... logs --no-color web e2e` и файлы из `test-results/`.
+Если команда упала, прежде чем очищать контейнеры, сохрани stdout/stderr, `docker compose ... ps -a`, `docker compose ... logs --no-color web e2e` и файлы из `test-results/`. Помни: pytest-playwright удаляет весь `test-results/` в начале каждого следующего прогона, поэтому артефакты забираем сразу после падения, а сессионные логи (воспроизведение сбоя, полный вывод pytest) складываем в `logs/` (каталог в `.gitignore`).
 
 ## 6. Как диагностировать сбой Compose E2E
 
@@ -147,6 +147,12 @@ docker compose -p cyberyozh-e2e --profile e2e down -v --remove-orphans
 6. **Docker daemon / порты** — вывод `docker info`, `docker ps`, проверка занятого host-порта. Для тестового запуска выбрать другой `APP_PORT` в диапазоне 8000–8010.
 
 Не скрывать исключения, не менять `depends_on` на `sleep`, не убирать healthcheck и не заменять Playwright на `curl`. Проверка `curl` может использоваться как дополнительная диагностика готовности, но не вместо браузерных тестов.
+
+Подтверждённые в этой сессии сбои и их решения (проверены логами, см. `spec/COMPOSE_E2E_RECOVERY.md`):
+
+- `E2E: Application is not reachable at http://web:8000 ... HTTP Error 400` + `DisallowedHost: Invalid HTTP_HOST header: 'web:8000'` в логах `web` — в `DJANGO_ALLOWED_HOSTS` нет имени сервиса `web`; healthcheck при этом проходит, потому что ходит на `127.0.0.1`.
+- console error `The Cross-Origin-Opener-Policy header has been ignored...` в assertions `assert_clean_browser` — Django шлёт COOP на недоверенном origin `http://web:8000`; в dev COOP отключён в `config/settings.py` (`SECURE_CROSS_ORIGIN_OPENER_POLICY = None if DEBUG`).
+- `Error: That port is already in use` или конфликт имён контейнеров при параллельном запуске — используйте `APP_PORT` и изолированное имя проекта (`-p cyberyozh-e2e`); фиксированных `container_name` в `compose.yaml` нет.
 
 ## 7. Unit/integration-тесты и линтер
 
